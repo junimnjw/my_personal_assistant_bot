@@ -1,0 +1,31 @@
+{
+  "name": "my-personal-assistant",
+  "version": "1.0.0",
+  "description": "나만의 개인 비서 에이전트 - LangGraph 기반 계층적 멀티 에이전트 텔레그램 봇",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "grammy": "^1.31.0",
+    "@grammyjs/files": "^1.1.1",
+    "langchain": "^0.3.22",
+    "@langchain/core": "^0.3.45",
+    "@langchain/openai": "^0.4.9",
+    "@langchain/langgraph": "^0.2.0",
+    "better-sqlite3": "^12.8.0",
+    "zod": "^3.24.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "tsx": "^4.19.0",
+    "vitest": "^3.0.0"
+  }
+}
