@@ -60,6 +60,18 @@ export function createBot(token: string, graph: { invoke: Function }) {
         routeResult: null,
       });
 
+      // 디버그: 그래프 결과 로깅
+      console.log("=== Graph Result ===");
+      console.log("currentAgent:", result.currentAgent);
+      console.log("routeResult:", JSON.stringify(result.routeResult));
+      console.log("messages count:", result.messages.length);
+      for (const m of result.messages) {
+        const type = m._getType?.() || "unknown";
+        const content = typeof m.content === "string" ? m.content.slice(0, 100) : JSON.stringify(m.content)?.slice(0, 100);
+        console.log(`  [${type}] ${content}`);
+      }
+      console.log("===================");
+
       // currentAgent 상태 업데이트
       if (result.currentAgent !== undefined) {
         userCurrentAgent.set(user.id, result.currentAgent);
@@ -106,16 +118,22 @@ export function createBot(token: string, graph: { invoke: Function }) {
       const caption = ctx.message.caption;
 
       await ctx.replyWithChatAction("typing");
+      console.log(`[Vision] Analyzing image: ${mimeType}, size: ${buffer.length} bytes`);
       const extractedText = await analyzeImage(base64, mimeType, caption);
+      console.log(`[Vision] Result: ${extractedText.slice(0, 300)}`);
 
-      const combinedInput = `[이미지 분석 결과]\n${extractedText}\n\n${caption || "이 이미지를 분석해주세요."}`;
+      const combinedInput = `[이미지 분석 결과]\n${extractedText}\n\n${caption || "이 처방전/의료 문서를 분석하고, 약물명/용량/복용법을 정리해주세요."}`;
 
       const result = await graph.invoke({
         messages: [new HumanMessage(combinedInput)],
         userId: user.id,
         userName: user.name,
-        currentAgent: userCurrentAgent.get(user.id) ?? null,
-        routeResult: null,
+        currentAgent: "doctor",
+        routeResult: {
+          targetAgent: "doctor",
+          confidence: 1.0,
+          fallbackResponse: null,
+        },
       });
 
       if (result.currentAgent !== undefined) {

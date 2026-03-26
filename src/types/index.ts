@@ -50,6 +50,7 @@ export interface AgentConfig {
   maxIterations: number;
   systemPrompt: string;
   createTools: (userId: number) => DynamicStructuredTool[];
+  loadUserContext?: (userId: number) => string;
 }
 
 export interface RouteResult {

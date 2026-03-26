@@ -31,10 +31,10 @@ LangGraph 기반 계층적 멀티 에이전트 텔레그램 봇.
 ## LLM 모델 (LM Studio)
 | 용도 | 모델 | 환경변수 |
 |------|------|----------|
-| 슈퍼바이저 (라우팅) | Qwen2.5-14B-Instruct-GGUF | SUPERVISOR_MODEL |
-| 주치의 에이전트 | hari-14b-i1 | DOCTOR_MODEL |
-| 자산관리 에이전트 | FinGPT-MT-Llama-3-8B-LoRA | FINANCE_MODEL |
-| 이미지 분석 (비전) | Qwen2.5-VL-7B-Instruct-GGUF | LM_STUDIO_VISION_MODEL |
+| 슈퍼바이저 (라우팅) | qwen3-vl-4b-instruct | SUPERVISOR_MODEL |
+| 주치의 에이전트 | qwen3-vl-4b-instruct | DOCTOR_MODEL |
+| 자산관리 에이전트 | qwen3-vl-4b-instruct | FINANCE_MODEL |
+| 이미지 분석 (비전) | qwen3-vl-4b-instruct | LM_STUDIO_VISION_MODEL |
 
 각 에이전트별 모델/URL 독립 설정 가능 (`*_MODEL`, `*_MODEL_URL`).
 
@@ -66,12 +66,12 @@ src/
 ```
 TELEGRAM_BOT_TOKEN=
 LM_STUDIO_BASE_URL=http://host.docker.internal:1234/v1
-LM_STUDIO_VISION_MODEL=Qwen2.5-VL-7B-Instruct-GGUF
+LM_STUDIO_VISION_MODEL=qwen3-vl-4b-instruct
 MEMORY_WINDOW_SIZE=20
 DB_PATH=./data/assistant.db
-SUPERVISOR_MODEL=Qwen2.5-14B-Instruct-GGUF
-DOCTOR_MODEL=hari-14b-i1
-FINANCE_MODEL=FinGPT-MT-Llama-3-8B-LoRA
+SUPERVISOR_MODEL=qwen3-vl-4b-instruct
+DOCTOR_MODEL=qwen3-vl-4b-instruct
+FINANCE_MODEL=qwen3-vl-4b-instruct
 ```
 
 ## 개발 컨벤션

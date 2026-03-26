@@ -52,15 +52,33 @@ export function buildGraph() {
     };
   });
 
-  // 엔트리: supervisor부터 시작
-  builder.addEdge("__start__", "supervisor");
-
-  // supervisor → 라우팅 결과에 따라 분기
+  // 라우팅 분기 맵
   const routeMap: Record<string, string> = {};
   for (const id of agentIds) {
     routeMap[id] = id;
   }
   routeMap["fallback"] = "fallback";
+  routeMap["supervisor"] = "supervisor";
+
+  // 엔트리: routeResult가 이미 있으면 supervisor 건너뛰기
+  builder.addConditionalEdges(
+    "__start__",
+    (state: GraphStateType) => {
+      if (state.routeResult?.targetAgent) {
+        const target = state.routeResult.targetAgent;
+        if (target in registry) return target;
+      }
+      return "supervisor";
+    },
+    routeMap
+  );
+
+  // supervisor → 라우팅 결과에 따라 분기
+  const supervisorRouteMap: Record<string, string> = {};
+  for (const id of agentIds) {
+    supervisorRouteMap[id] = id;
+  }
+  supervisorRouteMap["fallback"] = "fallback";
 
   builder.addConditionalEdges(
     "supervisor",
@@ -69,7 +87,7 @@ export function buildGraph() {
       if (target && target in registry) return target;
       return "fallback";
     },
-    routeMap
+    supervisorRouteMap
   );
 
   // 모든 하위 에이전트와 fallback → END

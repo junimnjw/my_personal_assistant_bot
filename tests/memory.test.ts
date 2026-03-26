@@ -1,12 +1,17 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+
+// 테스트용 in-memory DB 사용
+process.env.DB_PATH = ":memory:";
+
 import { getHistory, addToHistory, clearHistory } from "../src/memory/memory.js";
 
-describe("Memory (per-agent sliding window)", () => {
+describe("Memory (per-agent sliding window, SQLite)", () => {
   beforeEach(() => {
     clearHistory(1001);
     clearHistory(1001, "doctor");
     clearHistory(1001, "finance");
     clearHistory(1002);
+    clearHistory(1002, "doctor");
   });
 
   it("윈도우 크기를 초과하면 오래된 메시지가 제거되어야 한다", () => {
@@ -15,7 +20,6 @@ describe("Memory (per-agent sliding window)", () => {
     }
 
     const history = getHistory(1001, "doctor");
-    // 20턴 * 2 = 40 메시지
     expect(history.length).toBe(40);
     expect(history[0].content).toBe("질문 5");
   });
@@ -42,7 +46,14 @@ describe("Memory (per-agent sliding window)", () => {
   it("에이전트 없이 글로벌 메모리를 사용할 수 있어야 한다", () => {
     addToHistory(1001, "일반 질문", "일반 답변");
     expect(getHistory(1001)).toHaveLength(2);
-    // 에이전트별 메모리와 독립
+    expect(getHistory(1001, "doctor")).toHaveLength(0);
+  });
+
+  it("clearHistory 후 히스토리가 비어야 한다", () => {
+    addToHistory(1001, "질문", "답변", "doctor");
+    expect(getHistory(1001, "doctor")).toHaveLength(2);
+
+    clearHistory(1001, "doctor");
     expect(getHistory(1001, "doctor")).toHaveLength(0);
   });
 });

@@ -1,25 +1,8 @@
 import { ChatOpenAI } from "@langchain/openai";
-import { z } from "zod";
-import { AIMessage } from "@langchain/core/messages";
 import type { GraphStateType } from "./state.js";
 import { getAgentRegistry, getSupervisorModelConfig } from "../config/agents.js";
 
 const CONFIDENCE_THRESHOLD = 0.6;
-
-function buildRouteSchema() {
-  const agentIds = Object.keys(getAgentRegistry());
-  return z.object({
-    targetAgent: z
-      .enum(agentIds as [string, ...string[]])
-      .nullable()
-      .describe("The sub-agent to route to, or null if no agent matches"),
-    confidence: z
-      .number()
-      .min(0)
-      .max(1)
-      .describe("Confidence in the routing decision (0.0 to 1.0)"),
-  });
-}
 
 function buildRoutingPrompt(): string {
   const registry = getAgentRegistry();
@@ -32,13 +15,40 @@ function buildRoutingPrompt(): string {
 Available agents:
 ${agentDescriptions}
 
-Analyze the user's message and respond with:
-- targetAgent: the best matching agent ID, or null if nothing matches
-- confidence: your confidence level (0.0 to 1.0)
+Analyze the user's message and respond ONLY with a JSON object (no other text):
+{"targetAgent": "<agent_id or null>", "confidence": <0.0 to 1.0>}
 
-Be decisive. If the message clearly relates to an agent's domain, set confidence >= 0.7.
-If the message is ambiguous or could match multiple agents, set confidence lower.
-If the message is completely unrelated to any agent, set targetAgent to null.`;
+Rules:
+- If the message clearly relates to an agent's domain, set confidence >= 0.7.
+- If ambiguous, set confidence lower.
+- If completely unrelated, set targetAgent to null.
+- Respond ONLY with the JSON object, nothing else.`;
+}
+
+function parseRouteResult(content: string): { targetAgent: string | null; confidence: number } {
+  try {
+    // JSON 블록 추출 (```json ... ``` 또는 { ... })
+    const jsonMatch = content.match(/\{[\s\S]*?\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        targetAgent: parsed.targetAgent ?? null,
+        confidence: typeof parsed.confidence === "number" ? parsed.confidence : 0,
+      };
+    }
+  } catch {
+    // 파싱 실패
+  }
+
+  // 에이전트 ID가 텍스트에 언급되어 있는지 키워드 매칭
+  const registry = getAgentRegistry();
+  for (const id of Object.keys(registry)) {
+    if (content.toLowerCase().includes(id)) {
+      return { targetAgent: id, confidence: 0.7 };
+    }
+  }
+
+  return { targetAgent: null, confidence: 0 };
 }
 
 export async function supervisorNode(state: GraphStateType) {
@@ -51,39 +61,60 @@ export async function supervisorNode(state: GraphStateType) {
       apiKey: "not-needed",
     },
     temperature: 0,
+    maxTokens: 128,
+    modelKwargs: { thinking: false },
   });
-
-  const RouteSchema = buildRouteSchema();
-  const structuredModel = supervisorModel.withStructuredOutput(RouteSchema);
 
   const lastMessage = state.messages[state.messages.length - 1];
   const userInput =
     typeof lastMessage.content === "string" ? lastMessage.content : String(lastMessage.content);
 
-  let routeResult: z.infer<typeof RouteSchema>;
+  let routeResult: { targetAgent: string | null; confidence: number };
 
   try {
-    routeResult = await structuredModel.invoke([
+    const response = await supervisorModel.invoke([
       { role: "system", content: buildRoutingPrompt() },
       { role: "user", content: userInput },
     ]);
-  } catch {
-    // structured output 실패 시 fallback
+
+    const responseText =
+      typeof response.content === "string" ? response.content : String(response.content);
+    console.log("[Supervisor] raw response:", responseText);
+
+    routeResult = parseRouteResult(responseText);
+  } catch (error) {
+    console.error("[Supervisor] LLM call failed:", error);
     routeResult = { targetAgent: null, confidence: 0 };
   }
+
+  console.log("[Supervisor] route result:", JSON.stringify(routeResult));
 
   let finalTarget = routeResult.targetAgent;
   let fallbackResponse: string | null = null;
 
+  // 유효한 에이전트인지 검증
+  const registry = getAgentRegistry();
+  if (finalTarget && !(finalTarget in registry)) {
+    finalTarget = null;
+    routeResult.confidence = 0;
+  }
+
   if (routeResult.confidence < CONFIDENCE_THRESHOLD) {
     if (state.currentAgent) {
-      // 모호하지만 이전 에이전트 맥락이 있으면 유지
       finalTarget = state.currentAgent;
     } else {
-      // 맥락도 없고 확신도 낮으면 → 슈퍼바이저가 직접 응답
       finalTarget = null;
       try {
-        const generalResponse = await supervisorModel.invoke([
+        const fallbackModel = new ChatOpenAI({
+          modelName: config.modelName,
+          configuration: {
+            baseURL: config.baseUrl,
+            apiKey: "not-needed",
+          },
+          temperature: 0.3,
+          modelKwargs: { thinking: false },
+        });
+        const generalResponse = await fallbackModel.invoke([
           {
             role: "system",
             content:
@@ -96,10 +127,13 @@ export async function supervisorNode(state: GraphStateType) {
             ? generalResponse.content
             : String(generalResponse.content);
       } catch {
-        fallbackResponse = "안녕하세요! 저는 나만의 개인 비서입니다. 건강 관리나 재무 상담에 대해 물어보세요.";
+        fallbackResponse =
+          "안녕하세요! 저는 나만의 개인 비서입니다. 건강 관리나 재무 상담에 대해 물어보세요.";
       }
     }
   }
+
+  console.log("[Supervisor] final target:", finalTarget);
 
   return {
     routeResult: {
